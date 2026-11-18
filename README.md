@@ -92,6 +92,13 @@ L'application est disponible sur `http://localhost:8080` (API proxifiée vers le
 
 Les migrations SQL s'appliquent automatiquement au démarrage du backend.
 
+## CI/CD
+
+Deux workflows GitHub Actions (`.github/workflows/`) :
+
+- **CI** — à chaque push sur `main` et à chaque PR : gofmt/build/vet/test du backend, `npm ci` + build (tsc + Vite) du frontend.
+- **Docker** — à chaque push sur `main` : build et publication des images sur GHCR (`ghcr.io/dylandlbv/splitty-api`, `ghcr.io/dylandlbv/splitty-web`, tags `latest` + SHA du commit). Le workflow `Docker` utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire.
+
 ## Tests
 
 ```bash
