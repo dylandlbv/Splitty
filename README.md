@@ -54,13 +54,15 @@ frontend/
 
 ## Lancer en production (Docker)
 
+Une seule image contient tout le front (nginx) et l'API (Go) — la seule dépendance externe est PostgreSQL :
+
 ```bash
 export JWT_SECRET="une-longue-chaine-aleatoire"
 export POSTGRES_PASSWORD="mot-de-passe-postgres"   # optionnel, "splitty" par défaut
 docker compose up --build
 ```
 
-L'application est disponible sur `http://localhost:8080` (API proxifiée vers le backend via nginx).
+L'application est disponible sur `http://localhost:8080` : nginx sert les fichiers statiques et proxifie `/api/` vers le binaire Go (ports 80 → 8080 de l'hôte, modifiable via `SPLITTY_PORT`).
 
 ## Développement local
 
@@ -97,7 +99,9 @@ Les migrations SQL s'appliquent automatiquement au démarrage du backend.
 Deux workflows GitHub Actions (`.github/workflows/`) :
 
 - **CI** — à chaque push sur `main` et à chaque PR : gofmt/build/vet/test du backend, `npm ci` + build (tsc + Vite) du frontend.
-- **Docker** — à chaque push sur `main` : build et publication des images sur GHCR (`ghcr.io/dylandlbv/splitty-api`, `ghcr.io/dylandlbv/splitty-web`, tags `latest` + SHA du commit). Le workflow `Docker` utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire.
+- **Docker** — à chaque push sur `main` : build et publication d'une **image unique** `ghcr.io/dylandlbv/splitty` (tags `latest` + SHA du commit) contenant nginx + API + frontend. Le workflow utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire.
+
+Le `Dockerfile` à la racine construit dans l'ordre : frontend (Node) → backend (Go) → image finale nginx avec le binaire, les statiques et `docker-entrypoint.sh` (lance l'API en fond + nginx en foreground ; si l'API meurt, le conteneur s'arrête).
 
 ## Tests
 
