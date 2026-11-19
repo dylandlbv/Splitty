@@ -2,13 +2,17 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	pgconn "github.com/jackc/pgx/v5/pgconn"
+	moderncsqlite "modernc.org/sqlite"
 
 	"github.com/dylandlbv/Splitty/backend/internal/domain"
 )
+
+// SQLITE_CONSTRAINT_UNIQUE (extended result code).
+const sqliteConstraintUnique = 19 | (8 << 8)
 
 var (
 	ErrNotFound    = errors.New("not found")
@@ -18,7 +22,7 @@ var (
 
 func (s *Store) CreateUser(ctx context.Context, id, email, name, passwordHash string) (domain.User, error) {
 	var u domain.User
-	err := s.pool.QueryRow(ctx,
+	err := s.queryRow(ctx, s.db,
 		`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)
 		 RETURNING id, email, name`,
 		id, email, name, passwordHash,
@@ -35,11 +39,11 @@ func (s *Store) CreateUser(ctx context.Context, id, email, name, passwordHash st
 func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, string, error) {
 	var u domain.User
 	var hash string
-	err := s.pool.QueryRow(ctx,
+	err := s.queryRow(ctx, s.db,
 		`SELECT id, email, name, password_hash FROM users WHERE email = $1`, email,
 	).Scan(&u.ID, &u.Email, &u.Name, &hash)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return domain.User{}, "", ErrNotFound
 		}
 		return domain.User{}, "", err
@@ -49,11 +53,11 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, str
 
 func (s *Store) UserByID(ctx context.Context, id string) (domain.User, error) {
 	var u domain.User
-	err := s.pool.QueryRow(ctx,
+	err := s.queryRow(ctx, s.db,
 		`SELECT id, email, name FROM users WHERE id = $1`, id,
 	).Scan(&u.ID, &u.Email, &u.Name)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return domain.User{}, ErrNotFound
 		}
 		return domain.User{}, err
@@ -63,5 +67,9 @@ func (s *Store) UserByID(ctx context.Context, id string) (domain.User, error) {
 
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return true
+	}
+	var sqliteErr *moderncsqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqliteConstraintUnique
 }

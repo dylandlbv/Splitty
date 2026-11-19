@@ -3,13 +3,13 @@ CREATE TABLE users (
 	email text NOT NULL UNIQUE,
 	name text NOT NULL DEFAULT '',
 	password_hash text NOT NULL,
-	created_at timestamptz NOT NULL DEFAULT now()
+	created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE households (
 	id text PRIMARY KEY,
 	name text NOT NULL,
-	created_at timestamptz NOT NULL DEFAULT now()
+	created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE memberships (
@@ -36,7 +36,7 @@ CREATE TABLE expenses (
 	is_common boolean NOT NULL DEFAULT true,
 	split_mode text NOT NULL CHECK (split_mode IN ('equal', 'proportional')),
 	month date NOT NULL,
-	created_at timestamptz NOT NULL DEFAULT now()
+	created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX expenses_household_month_idx ON expenses (household_id, month);

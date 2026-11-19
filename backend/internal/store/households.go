@@ -2,38 +2,40 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/dylandlbv/Splitty/backend/internal/domain"
 )
 
 func (s *Store) CreateHousehold(ctx context.Context, id, name, ownerID string) (domain.Household, error) {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return domain.Household{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback()
 
 	var h domain.Household
-	if err := tx.QueryRow(ctx,
+	if err := s.queryRow(ctx, tx,
 		`INSERT INTO households (id, name) VALUES ($1, $2) RETURNING id, name`,
 		id, name,
 	).Scan(&h.ID, &h.Name); err != nil {
 		return domain.Household{}, err
 	}
-	if _, err := tx.Exec(ctx,
+	if _, err := s.exec(ctx, tx,
 		`INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'admin')`,
 		id, ownerID,
 	); err != nil {
 		return domain.Household{}, err
 	}
-	return h, tx.Commit(ctx)
+	if err := tx.Commit(); err != nil {
+		return domain.Household{}, err
+	}
+	return h, nil
 }
 
 func (s *Store) ListHouseholds(ctx context.Context, userID string) ([]domain.Household, error) {
-	rows, err := s.pool.Query(ctx,
+	rows, err := s.query(ctx, s.db,
 		`SELECT h.id, h.name FROM households h
 		 JOIN memberships m ON m.household_id = h.id
 		 WHERE m.user_id = $1
@@ -56,9 +58,9 @@ func (s *Store) ListHouseholds(ctx context.Context, userID string) ([]domain.Hou
 
 func (s *Store) GetHousehold(ctx context.Context, id string) (domain.Household, error) {
 	var h domain.Household
-	err := s.pool.QueryRow(ctx, `SELECT id, name FROM households WHERE id = $1`, id).Scan(&h.ID, &h.Name)
+	err := s.queryRow(ctx, s.db, `SELECT id, name FROM households WHERE id = $1`, id).Scan(&h.ID, &h.Name)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Household{}, ErrNotFound
 		}
 		return domain.Household{}, err
@@ -67,7 +69,7 @@ func (s *Store) GetHousehold(ctx context.Context, id string) (domain.Household, 
 }
 
 func (s *Store) ListMembers(ctx context.Context, householdID string) ([]domain.Member, error) {
-	rows, err := s.pool.Query(ctx,
+	rows, err := s.query(ctx, s.db,
 		`SELECT u.id, u.email, u.name, ms.role FROM memberships ms
 		 JOIN users u ON u.id = ms.user_id
 		 WHERE ms.household_id = $1
@@ -90,12 +92,12 @@ func (s *Store) ListMembers(ctx context.Context, householdID string) ([]domain.M
 
 func (s *Store) MemberRole(ctx context.Context, householdID, userID string) (string, error) {
 	var role string
-	err := s.pool.QueryRow(ctx,
+	err := s.queryRow(ctx, s.db,
 		`SELECT role FROM memberships WHERE household_id = $1 AND user_id = $2`,
 		householdID, userID,
 	).Scan(&role)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrNotFound
 		}
 		return "", err
@@ -105,19 +107,18 @@ func (s *Store) MemberRole(ctx context.Context, householdID, userID string) (str
 
 func (s *Store) AddMember(ctx context.Context, householdID, email string) (domain.Member, error) {
 	var userID string
-	err := s.pool.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID)
+	err := s.queryRow(ctx, s.db, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Member{}, ErrNotFound
 		}
 		return domain.Member{}, err
 	}
-	_, err = s.pool.Exec(ctx,
+	if _, err := s.exec(ctx, s.db,
 		`INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')
 		 ON CONFLICT (household_id, user_id) DO NOTHING`,
 		householdID, userID,
-	)
-	if err != nil {
+	); err != nil {
 		return domain.Member{}, err
 	}
 	user, err := s.UserByID(ctx, userID)

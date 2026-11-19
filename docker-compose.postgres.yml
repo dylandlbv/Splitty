@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: splitty
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-splitty}
+      POSTGRES_DB: splitty
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U splitty']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    environment:
+      DB_DRIVER: postgres
+      DATABASE_URL: postgres://splitty:${POSTGRES_PASSWORD:-splitty}@db:5432/splitty?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
