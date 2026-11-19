@@ -99,7 +99,7 @@ Les migrations SQL s'appliquent automatiquement au démarrage du backend.
 Deux workflows GitHub Actions (`.github/workflows/`) :
 
 - **CI** — à chaque push sur `main` et à chaque PR : gofmt/build/vet/test du backend, `npm ci` + build (tsc + Vite) du frontend.
-- **Docker** — à chaque push sur `main` : build et publication d'une **image unique** `ghcr.io/dylandlbv/splitty` (tags `latest` + SHA du commit) contenant nginx + API + frontend. Le workflow utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire.
+- **Docker** — à chaque push sur `main` et chaque tag git `v*` : build et publication de l'image unique `ghcr.io/dylandlbv/splitty` contenant nginx + API + frontend. Tags publiés : `latest` + `sha-<commit>` sur `main` ; `X.Y.Z` / `X.Y` / `X` / `latest` sur un tag git `vX.Y.Z`. Le workflow utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire. Pour sortir une version : `git tag v0.1.0 && git push origin v0.1.0`.
 
 Le `Dockerfile` à la racine construit dans l'ordre : frontend (Node) → backend (Go) → image finale nginx avec le binaire, les statiques et `docker-entrypoint.sh` (lance l'API en fond + nginx en foreground ; si l'API meurt, le conteneur s'arrête).
 
