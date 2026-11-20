@@ -11,9 +11,9 @@ import (
 var migrationFS embed.FS
 
 func (s *Store) Migrate(ctx context.Context) error {
-	if _, err := s.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+	if _, err := s.exec(ctx, s.db, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version text PRIMARY KEY,
-		applied_at timestamptz NOT NULL DEFAULT now()
+		applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
@@ -29,33 +29,33 @@ func (s *Store) Migrate(ctx context.Context) error {
 	sort.Strings(names)
 
 	for _, name := range names {
-		var applied bool
-		if err := s.pool.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, name,
-		).Scan(&applied); err != nil {
-			return err
-		}
-		if applied {
-			continue
-		}
-
 		sqlBytes, err := migrationFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return err
 		}
-		tx, err := s.pool.Begin(ctx)
+		tx, err := s.begin(ctx)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, string(sqlBytes)); err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("apply migration %s: %w", name, err)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
-			_ = tx.Rollback(ctx)
+		tag, err := s.exec(ctx, tx, `INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`, name)
+		if err != nil {
+			_ = tx.Rollback()
 			return err
 		}
-		if err := tx.Commit(ctx); err != nil {
+		claimed, err := tag.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if claimed == 0 {
+			_ = tx.Rollback()
+			continue
+		}
+		if _, err := s.exec(ctx, tx, string(sqlBytes)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("apply migration %s: %w", name, err)
+		}
+		if err := tx.Commit(); err != nil {
 			return err
 		}
 	}

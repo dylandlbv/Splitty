@@ -15,3 +15,8 @@ frontend/dist/
 .idea/
 .vscode/
 .DS_Store
+
+# SQLite (développement local)
+backend/data/
+*.db-wal
+*.db-shm
