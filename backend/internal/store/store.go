@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -51,6 +52,10 @@ func Open(ctx context.Context, driver, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if driver == DriverSQLite {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+	}
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -70,11 +75,18 @@ type dbtx interface {
 
 var placeholderRe = regexp.MustCompile(`\$\d+`)
 
+var rebindCache sync.Map
+
 func (s *Store) rebind(query string) string {
-	if s.driver == DriverSQLite {
-		return placeholderRe.ReplaceAllString(query, "?")
+	if s.driver != DriverSQLite {
+		return query
 	}
-	return query
+	if v, ok := rebindCache.Load(query); ok {
+		return v.(string)
+	}
+	rebound := placeholderRe.ReplaceAllString(query, "?")
+	rebindCache.Store(query, rebound)
+	return rebound
 }
 
 func (s *Store) exec(ctx context.Context, tx dbtx, query string, args ...any) (sql.Result, error) {
@@ -96,7 +108,7 @@ func (s *Store) begin(ctx context.Context) (*sql.Tx, error) {
 func scanTime(v any) (time.Time, error) {
 	switch t := v.(type) {
 	case time.Time:
-		return t, nil
+		return t.UTC(), nil
 	case string:
 		return parseDBTime(t)
 	case []byte:
@@ -116,7 +128,7 @@ var timeLayouts = []string{
 func parseDBTime(s string) (time.Time, error) {
 	for _, layout := range timeLayouts {
 		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
+			return t.UTC(), nil
 		}
 	}
 	return time.Time{}, fmt.Errorf("cannot parse time value %q", s)

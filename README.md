@@ -67,7 +67,7 @@ Pour utiliser **PostgreSQL** plutôt que SQLite :
 
 ```bash
 export JWT_SECRET="une-longue-chaine-aleatoire"
-export POSTGRES_PASSWORD="mot-de-passe-postgres"   # optionnel, "splitty" par défaut
+export POSTGRES_PASSWORD="mot-de-passe-postgres"   # requis
 docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
 ```
 

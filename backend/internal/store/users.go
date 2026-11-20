@@ -4,15 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	pgconn "github.com/jackc/pgx/v5/pgconn"
 	moderncsqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/dylandlbv/Splitty/backend/internal/domain"
 )
 
-// SQLITE_CONSTRAINT_UNIQUE (extended result code).
-const sqliteConstraintUnique = 19 | (8 << 8)
+const (
+	pgCodeUniqueViolation     = "23505"
+	pgCodeForeignKeyViolation = "23503"
+)
 
 var (
 	ErrNotFound    = errors.New("not found")
@@ -28,7 +32,7 @@ func (s *Store) CreateUser(ctx context.Context, id, email, name, passwordHash st
 		id, email, name, passwordHash,
 	).Scan(&u.ID, &u.Email, &u.Name)
 	if err != nil {
-		if isUniqueViolation(err) {
+		if isEmailTaken(err) {
 			return domain.User{}, ErrEmailTaken
 		}
 		return domain.User{}, err
@@ -65,11 +69,24 @@ func (s *Store) UserByID(ctx context.Context, id string) (domain.User, error) {
 	return u, nil
 }
 
-func isUniqueViolation(err error) bool {
+func isEmailTaken(err error) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return true
+	if errors.As(err, &pgErr) && pgErr.Code == pgCodeUniqueViolation {
+		return pgErr.ConstraintName == "users_email_key"
 	}
 	var sqliteErr *moderncsqlite.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqliteConstraintUnique
+	if errors.As(err, &sqliteErr) &&
+		(sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE || sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY) {
+		return strings.Contains(sqliteErr.Error(), "users.email")
+	}
+	return false
+}
+
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == pgCodeForeignKeyViolation
+	}
+	var sqliteErr *moderncsqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
 }

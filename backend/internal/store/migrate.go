@@ -29,16 +29,6 @@ func (s *Store) Migrate(ctx context.Context) error {
 	sort.Strings(names)
 
 	for _, name := range names {
-		var applied bool
-		if err := s.queryRow(ctx, s.db,
-			`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, name,
-		).Scan(&applied); err != nil {
-			return err
-		}
-		if applied {
-			continue
-		}
-
 		sqlBytes, err := migrationFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return err
@@ -47,13 +37,23 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		tag, err := s.exec(ctx, tx, `INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`, name)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		claimed, err := tag.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if claimed == 0 {
+			_ = tx.Rollback()
+			continue
+		}
 		if _, err := s.exec(ctx, tx, string(sqlBytes)); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("apply migration %s: %w", name, err)
-		}
-		if _, err := s.exec(ctx, tx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
-			_ = tx.Rollback()
-			return err
 		}
 		if err := tx.Commit(); err != nil {
 			return err

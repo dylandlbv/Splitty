@@ -1,24 +1,16 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/dylandlbv/Splitty/backend/internal/store"
+	"github.com/dylandlbv/Splitty/backend/internal/store/storetest"
 )
 
 func TestAuthFlowEndToEnd(t *testing.T) {
-	st, err := store.Open(context.Background(), store.DriverSQLite, t.TempDir()+"/test.db")
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	defer st.Close()
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	st := storetest.OpenSQLite(t)
 	h := NewHandler(st, "test-secret", "")
 
 	post := func(path, body string) *httptest.ResponseRecorder {
@@ -29,7 +21,7 @@ func TestAuthFlowEndToEnd(t *testing.T) {
 		return w
 	}
 
-	if w := post("/api/auth/register", `{"email":"a@b.c","password":"secret123","name":"A"}`); w.Code != http.StatusCreated && w.Code != http.StatusOK {
+	if w := post("/api/auth/register", `{"email":"a@b.c","password":"secret123","name":"A"}`); w.Code != http.StatusCreated {
 		t.Fatalf("register: %d %s", w.Code, w.Body)
 	}
 	if w := post("/api/auth/register", `{"email":"a@b.c","password":"secret123","name":"Dup"}`); w.Code != http.StatusConflict {

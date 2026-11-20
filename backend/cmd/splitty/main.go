@@ -56,7 +56,7 @@ func databaseConfig() (string, string, error) {
 	case store.DriverPostgres:
 		dsn := os.Getenv("DATABASE_URL")
 		if dsn == "" {
-			dsn = "postgres://splitty:splitty@localhost:5432/splitty?sslmode=disable"
+			return "", "", errors.New("DATABASE_URL must be set when DB_DRIVER=postgres")
 		}
 		return driver, dsn, nil
 	default:

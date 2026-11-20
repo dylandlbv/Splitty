@@ -106,19 +106,31 @@ func (s *Store) MemberRole(ctx context.Context, householdID, userID string) (str
 }
 
 func (s *Store) AddMember(ctx context.Context, householdID, email string) (domain.Member, error) {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return domain.Member{}, err
+	}
+	defer tx.Rollback()
+
 	var userID string
-	err := s.queryRow(ctx, s.db, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID)
+	err = s.queryRow(ctx, tx, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Member{}, ErrNotFound
 		}
 		return domain.Member{}, err
 	}
-	if _, err := s.exec(ctx, s.db,
+	if _, err := s.exec(ctx, tx,
 		`INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')
 		 ON CONFLICT (household_id, user_id) DO NOTHING`,
 		householdID, userID,
 	); err != nil {
+		if isForeignKeyViolation(err) {
+			return domain.Member{}, ErrNotFound
+		}
+		return domain.Member{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return domain.Member{}, err
 	}
 	user, err := s.UserByID(ctx, userID)
