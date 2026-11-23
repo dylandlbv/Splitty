@@ -15,7 +15,7 @@ COPY backend/ ./
 RUN CGO_ENABLED=0 go build -trimpath -o /bin/splitty ./cmd/splitty
 
 # ---- runtime: nginx front + Go API in one container ----
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=api /bin/splitty /app/splitty
