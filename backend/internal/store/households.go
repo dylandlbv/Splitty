@@ -70,7 +70,7 @@ func (s *Store) GetHousehold(ctx context.Context, id string) (domain.Household, 
 
 func (s *Store) ListMembers(ctx context.Context, householdID string) ([]domain.Member, error) {
 	rows, err := s.query(ctx, s.db,
-		`SELECT u.id, u.email, u.name, ms.role FROM memberships ms
+		`SELECT u.id, u.email, u.name, u.has_login, ms.role FROM memberships ms
 		 JOIN users u ON u.id = ms.user_id
 		 WHERE ms.household_id = $1
 		 ORDER BY u.created_at, u.id`, householdID)
@@ -82,9 +82,10 @@ func (s *Store) ListMembers(ctx context.Context, householdID string) ([]domain.M
 	var out []domain.Member
 	for rows.Next() {
 		var m domain.Member
-		if err := rows.Scan(&m.User.ID, &m.User.Email, &m.User.Name, &m.Role); err != nil {
+		if err := rows.Scan(&m.User.ID, &m.User.Email, &m.User.Name, &m.User.HasLogin, &m.Role); err != nil {
 			return nil, err
 		}
+		m.User = publicUser(m.User)
 		out = append(out, m)
 	}
 	return out, rows.Err()
@@ -113,7 +114,7 @@ func (s *Store) AddMember(ctx context.Context, householdID, email string) (domai
 	defer tx.Rollback()
 
 	var userID string
-	err = s.queryRow(ctx, tx, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID)
+	err = s.queryRow(ctx, tx, `SELECT id FROM users WHERE email = $1 AND has_login`, email).Scan(&userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Member{}, ErrNotFound
@@ -135,6 +136,35 @@ func (s *Store) AddMember(ctx context.Context, householdID, email string) (domai
 	}
 	user, err := s.UserByID(ctx, userID)
 	if err != nil {
+		return domain.Member{}, err
+	}
+	return domain.Member{User: user, Role: "member"}, nil
+}
+
+// AddManagedMember creates, in a single transaction, a member without a
+// login (no email, no password) and attaches it to the household as a regular
+// member: incomes, expenses and balances work for it like for any member.
+func (s *Store) AddManagedMember(ctx context.Context, householdID, id, name string) (domain.Member, error) {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return domain.Member{}, err
+	}
+	defer tx.Rollback()
+
+	user, err := s.CreateManagedUser(ctx, tx, id, name)
+	if err != nil {
+		return domain.Member{}, err
+	}
+	if _, err := s.exec(ctx, tx,
+		`INSERT INTO memberships (household_id, user_id, role) VALUES ($1, $2, 'member')`,
+		householdID, user.ID,
+	); err != nil {
+		if isForeignKeyViolation(err) {
+			return domain.Member{}, ErrNotFound
+		}
+		return domain.Member{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return domain.Member{}, err
 	}
 	return domain.Member{User: user, Role: "member"}, nil

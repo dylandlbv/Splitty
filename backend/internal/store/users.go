@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	pgconn "github.com/jackc/pgx/v5/pgconn"
@@ -27,10 +28,10 @@ var (
 func (s *Store) CreateUser(ctx context.Context, id, email, name, passwordHash string) (domain.User, error) {
 	var u domain.User
 	err := s.queryRow(ctx, s.db,
-		`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)
-		 RETURNING id, email, name`,
+		`INSERT INTO users (id, email, name, password_hash, has_login) VALUES ($1, $2, $3, $4, true)
+		 RETURNING id, email, name, has_login`,
 		id, email, name, passwordHash,
-	).Scan(&u.ID, &u.Email, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.HasLogin)
 	if err != nil {
 		if isEmailTaken(err) {
 			return domain.User{}, ErrEmailTaken
@@ -40,12 +41,42 @@ func (s *Store) CreateUser(ctx context.Context, id, email, name, passwordHash st
 	return u, nil
 }
 
+// CreateManagedUser inserts a user row without any login credential: a
+// synthetic unique email (never exposed by the API) and an empty password
+// hash, so authentication against this row always fails.
+func (s *Store) CreateManagedUser(ctx context.Context, tx dbtx, id, name string) (domain.User, error) {
+	var u domain.User
+	err := s.queryRow(ctx, tx,
+		`INSERT INTO users (id, email, name, password_hash, has_login) VALUES ($1, $2, $3, '', false)
+		 RETURNING id, email, name, has_login`,
+		id, managedUserEmail(id), name,
+	).Scan(&u.ID, &u.Email, &u.Name, &u.HasLogin)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return publicUser(u), nil
+}
+
+// managedUserEmail builds the internal, unique placeholder email stored for
+// members without a login. It is never returned by the API.
+func managedUserEmail(id string) string {
+	return fmt.Sprintf("no-login+%s@splitty.invalid", id)
+}
+
+// publicUser hides the synthetic email of members without a login.
+func publicUser(u domain.User) domain.User {
+	if !u.HasLogin {
+		u.Email = ""
+	}
+	return u
+}
+
 func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, string, error) {
 	var u domain.User
 	var hash string
 	err := s.queryRow(ctx, s.db,
-		`SELECT id, email, name, password_hash FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Name, &hash)
+		`SELECT id, email, name, password_hash, has_login FROM users WHERE email = $1 AND has_login`, email,
+	).Scan(&u.ID, &u.Email, &u.Name, &hash, &u.HasLogin)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.User{}, "", ErrNotFound
@@ -58,15 +89,15 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, str
 func (s *Store) UserByID(ctx context.Context, id string) (domain.User, error) {
 	var u domain.User
 	err := s.queryRow(ctx, s.db,
-		`SELECT id, email, name FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Name)
+		`SELECT id, email, name, has_login FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.Name, &u.HasLogin)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.User{}, ErrNotFound
 		}
 		return domain.User{}, err
 	}
-	return u, nil
+	return publicUser(u), nil
 }
 
 func isEmailTaken(err error) bool {

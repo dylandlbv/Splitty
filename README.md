@@ -5,7 +5,7 @@ Splitty gère le budget familial : chacun déclare ses revenus mensuels, chacun 
 ## Fonctionnalités
 
 - **Comptes utilisateurs** : inscription / connexion (JWT, mots de passe hachés avec bcrypt).
-- **Multi-foyers** : chaque foyer a ses membres, ses revenus et ses dépenses. Le créateur d'un foyer est administrateur et invite les autres membres par email.
+- **Multi-foyers** : chaque foyer a ses membres, ses revenus et ses dépenses. Le créateur d'un foyer est administrateur, invite les autres membres par email et peut aussi créer des **membres sans compte** (sans login) dont il gère les revenus et les dépenses comme les siens.
 - **Revenus mensuels** : chaque membre déclare son revenu pour chaque mois.
 - **Dépenses personnalisées** : nom, montant, payeur, dépense commune ou personnelle, répartition **égalitaire** ou **proportionnelle** aux revenus déclarés.
 - **Soldes mensuels** : pour chaque membre

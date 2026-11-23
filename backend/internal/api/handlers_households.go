@@ -116,6 +116,43 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, member)
 }
 
+// handleAddManagedMember lets a household admin create a member that has no
+// login (just a name). Incomes, expenses and balances are then managed for
+// that member exactly like for any other member of the household.
+func (s *Server) handleAddManagedMember(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	role, ok := s.memberOr404(w, r, id)
+	if !ok {
+		return
+	}
+	if role != "admin" {
+		writeErr(w, http.StatusForbidden, "only admins can add members")
+		return
+	}
+	req, err := decode[struct {
+		Name string `json:"name"`
+	}](r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeErr(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	member, err := s.store.AddManagedMember(r.Context(), id, auth.NewID(), name)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "household not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusCreated, member)
+}
+
 /// ---------- Incomes ----------
 
 func (s *Server) handleGetIncomes(w http.ResponseWriter, r *http.Request) {

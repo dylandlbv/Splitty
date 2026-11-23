@@ -24,6 +24,7 @@ func NewHandler(store *store.Store, secret, allowedOrigin string) http.Handler {
 	mux.HandleFunc("POST /api/households", s.auth(s.handleCreateHousehold))
 	mux.HandleFunc("GET /api/households/{id}", s.auth(s.handleGetHousehold))
 	mux.HandleFunc("POST /api/households/{id}/members", s.auth(s.handleAddMember))
+	mux.HandleFunc("POST /api/households/{id}/members/managed", s.auth(s.handleAddManagedMember))
 
 	mux.HandleFunc("GET /api/households/{id}/incomes", s.auth(s.handleGetIncomes))
 	mux.HandleFunc("PUT /api/households/{id}/incomes/{month}", s.auth(s.handleSetIncomes))
