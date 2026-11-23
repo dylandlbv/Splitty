@@ -29,10 +29,10 @@ Tous les montants sont stockés en **centimes** (bigint) pour éviter les erreur
 
 | Couche     | Techno                                        |
 | ---------- | --------------------------------------------- |
-| Backend    | Go 1.27 (net/http, pgx v5, JWT, bcrypt)       |
+| Backend    | Go 1.27 (net/http, database/sql, JWT, bcrypt) |
 | Frontend   | React 19 + TypeScript + Vite + React Router   |
-| Base       | PostgreSQL 17 (migrations SQL embarquées)     |
-| Déploiement| Docker Compose (db + api + nginx)             |
+| Base       | SQLite (par défaut) ou PostgreSQL 17          |
+| Déploiement| Docker Compose (SQLite par défaut ; variante Postgres) |
 
 ```
 backend/
@@ -41,7 +41,7 @@ backend/
 │   ├── api/               # handlers HTTP + middleware auth
 │   ├── auth/              # JWT, bcrypt, génération d'ID
 │   ├── domain/            # types + moteur de calcul des soldes (testé)
-│   └── store/             # accès PostgreSQL + migrations embarquées
+│   └── store/             # accès SQLite / PostgreSQL + migrations embarquées
 └── internal/store/migrations/
 
 frontend/
@@ -54,33 +54,48 @@ frontend/
 
 ## Lancer en production (Docker)
 
-Une seule image contient tout le front (nginx) et l'API (Go) — la seule dépendance externe est PostgreSQL :
+Une seule image contient tout le front (nginx) et l'API (Go). Par défaut, les données sont stockées dans une base **SQLite** — aucun service externe n'est nécessaire :
 
 ```bash
 export JWT_SECRET="une-longue-chaine-aleatoire"
-export POSTGRES_PASSWORD="mot-de-passe-postgres"   # optionnel, "splitty" par défaut
 docker compose up --build
+```
+
+La base SQLite vit dans le volume `sqldata` (fichier `/data/splitty.db` dans le conteneur, modifiable via `SQLITE_PATH`).
+
+Pour utiliser **PostgreSQL** plutôt que SQLite :
+
+```bash
+export JWT_SECRET="une-longue-chaine-aleatoire"
+export POSTGRES_PASSWORD="mot-de-passe-postgres"   # requis
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
 ```
 
 L'application est disponible sur `http://localhost:8080` : nginx sert les fichiers statiques et proxifie `/api/` vers le binaire Go (ports 80 → 8080 de l'hôte, modifiable via `SPLITTY_PORT`).
 
 ## Développement local
 
-1. PostgreSQL local :
+SQLite est la base par défaut : aucun service externe n'est nécessaire.
+
+1. Backend :
+
+   ```bash
+   cd backend
+   export JWT_SECRET="dev-secret"          # requis
+   export ALLOWED_ORIGIN="http://localhost:5173"  # CORS pour le front en dev
+   export SQLITE_PATH="./data/splitty.db"  # optionnel, ./data/splitty.db par défaut
+   go run ./cmd/splitty
+   ```
+
+   Pour développer avec **PostgreSQL** à la place :
 
    ```bash
    docker run -d --name splitty-db -p 5432:5432 \
      -e POSTGRES_USER=splitty -e POSTGRES_PASSWORD=splitty -e POSTGRES_DB=splitty \
      postgres:17-alpine
-   ```
 
-2. Backend :
-
-   ```bash
-   cd backend
+   export DB_DRIVER=postgres
    export DATABASE_URL="postgres://splitty:splitty@localhost:5432/splitty?sslmode=disable"
-   export JWT_SECRET="dev-secret"          # requis
-   export ALLOWED_ORIGIN="http://localhost:5173"  # CORS pour le front en dev
    go run ./cmd/splitty
    ```
 
@@ -109,6 +124,8 @@ Le `Dockerfile` à la racine construit dans l'ordre : frontend (Node) → backen
 cd backend
 go test ./...      # moteur de calcul des soldes : parts, arrondis, transferts
 ```
+
+La suite du store (`internal/store`) et le test d'intégration register/login tournent sur SQLite via un fichier temporaire : aucune infrastructure n'est nécessaire.
 
 ## API
 
