@@ -1,5 +1,5 @@
 # ---- frontend build ----
-FROM node:22 AS web
+FROM node:26 AS web
 WORKDIR /app/web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
