@@ -41,12 +41,11 @@ func TestExpenses(t *testing.T) {
 }
 
 func TestPostgresSuite(t *testing.T) {
-	st := storetest.OpenPostgres(t)
-	runMigrateTwice(t, st)
-	runUsers(t, st)
-	runHouseholdsAndMembers(t, st)
-	runIncomes(t, st)
-	runExpenses(t, st)
+	runMigrateTwice(t, storetest.OpenPostgres(t))
+	runUsers(t, storetest.OpenPostgres(t))
+	runHouseholdsAndMembers(t, storetest.OpenPostgres(t))
+	runIncomes(t, storetest.OpenPostgres(t))
+	runExpenses(t, storetest.OpenPostgres(t))
 }
 
 func runMigrateTwice(t *testing.T, st *store.Store) {
