@@ -111,21 +111,35 @@ Les migrations SQL s'appliquent automatiquement au démarrage du backend.
 
 ## CI/CD
 
-Deux workflows GitHub Actions (`.github/workflows/`) :
+Trois workflows GitHub Actions (`.github/workflows/`) :
 
 - **CI** — à chaque push sur `main` et à chaque PR : gofmt/build/vet/test du backend, `npm ci` + build (tsc + Vite) du frontend.
+- **Tests** — pipeline QA à chaque push sur `main` et à chaque PR : lint (gofmt, `go vet`), tests backend avec `-race` et couverture, smoke e2e avec le vrai binaire, suite store rejouée sur un service PostgreSQL 17, et build frontend (tsc + Vite). Voir la section [Tests](#tests) pour les détails et pour rejouer la même pipeline en local.
 - **Docker** — à chaque push sur `main` et chaque tag git `v*` : build et publication de l'image unique `ghcr.io/dylandlbv/splitty` contenant nginx + API + frontend. Tags publiés : `latest` + `sha-<commit>` sur `main` ; `X.Y.Z` / `X.Y` / `X` / `latest` sur un tag git `vX.Y.Z`. Le workflow utilise le `GITHUB_TOKEN` intégré ; aucune configuration de secret n'est nécessaire. Pour sortir une version : `git tag v0.1.0 && git push origin v0.1.0`.
 
 Le `Dockerfile` à la racine construit dans l'ordre : frontend (Node) → backend (Go) → image finale nginx avec le binaire, les statiques et `docker-entrypoint.sh` (lance l'API en fond + nginx en foreground ; si l'API meurt, le conteneur s'arrête).
 
 ## Tests
 
+Pipeline de tests complète, identique en local et en CI (workflow **Tests**, `.github/workflows/test.yml`) :
+
 ```bash
-cd backend
-go test ./...      # moteur de calcul des soldes : parts, arrondis, transferts
+./scripts/test.sh  # gofmt + go vet + go test ./... -race (backend) + npm ci + build (frontend)
 ```
 
-La suite du store (`internal/store`) et le test d'intégration register/login tournent sur SQLite via un fichier temporaire : aucune infrastructure n'est nécessaire.
+Niveaux de tests :
+
+- **Unitaires** (`backend/internal/domain`) : moteur de calcul des soldes — parts égales / proportionnelles, arrondis au centime, exclusion des membres sans revenu, repli égalitaire, remboursements gloutons.
+- **Store** (`backend/internal/store`) : la suite est rejouée sur SQLite (fichier temporaire, aucune infrastructure) et, si `TEST_DATABASE_URL` est défini, sur PostgreSQL (`TestPostgresSuite`, activé en CI via un service postgres:17).
+- **API** (`backend/internal/api`) : scénarios de bout en bout via `httptest` — auth (validation, doublons, mauvais mot de passe, tokens manquants/invalides), foyers et permissions (admin / membre / non-membre), revenus (upsert, validations), dépenses (validations, filtre par mois, suppression), et soldes comparés au moteur de calcul.
+- **E2E smoke** (`backend/e2e`) : le vrai binaire est compilé puis lancé avec une base SQLite temporaire ; un scénario complet est joué en HTTP réel (inscription → connexion → foyer → invitation → revenus → dépenses → soldes → suppression → isolement d'un non-membre), et le refus de démarrer sans `JWT_SECRET` est vérifié.
+
+```bash
+cd backend
+go test ./...                 # tout : unitaires + store + API + e2e
+go test ./internal/... -race -coverprofile=coverage.out   # couverture : go tool cover -func=coverage.out
+go test ./e2e/... -v          # smoke e2e seul
+```
 
 ## API
 
