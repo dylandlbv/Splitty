@@ -31,6 +31,7 @@ export default function HouseholdPage() {
   const [error, setError] = useState('')
 
   const [memberEmail, setMemberEmail] = useState('')
+  const [managedName, setManagedName] = useState('')
 
   const [expenseName, setExpenseName] = useState('')
   const [expenseEuros, setExpenseEuros] = useState('')
@@ -78,6 +79,18 @@ export default function HouseholdPage() {
     try {
       await api.addMember(id, memberEmail.trim())
       setMemberEmail('')
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    }
+  }
+
+  async function handleAddManagedMember(e: FormEvent) {
+    e.preventDefault()
+    if (!managedName.trim()) return
+    try {
+      await api.addManagedMember(id, managedName.trim())
+      setManagedName('')
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur')
@@ -166,8 +179,9 @@ export default function HouseholdPage() {
               {detail.members.map((m) => (
                 <tr key={m.user.id}>
                   <td>
-                    {m.user.name || m.user.email}
+                    {m.user.name || m.user.email || '—'}
                     {m.role === 'admin' && <span className="badge">admin</span>}
+                    {!m.user.has_login && <span className="badge">sans compte</span>}
                   </td>
                   <td>
                     <input
@@ -318,6 +332,21 @@ export default function HouseholdPage() {
               />
               <button className="btn btn-primary" type="submit">
                 Inviter
+              </button>
+            </form>
+            <h3>Créer un membre sans compte</h3>
+            <p className="muted small">
+              Sans email ni mot de passe (enfant, personne âgée…) : vous déclarez ses revenus et ses
+              dépenses à sa place, comme pour votre propre compte.
+            </p>
+            <form onSubmit={handleAddManagedMember} className="row-form">
+              <input
+                value={managedName}
+                onChange={(e) => setManagedName(e.target.value)}
+                placeholder="Prénom ou surnom"
+              />
+              <button className="btn btn-primary" type="submit">
+                Créer
               </button>
             </form>
           </section>

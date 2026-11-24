@@ -20,6 +20,9 @@ type User struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
+	// HasLogin is false for members created by an admin without an account:
+	// they cannot authenticate and their Email is never exposed (empty).
+	HasLogin bool `json:"has_login"`
 }
 
 type Household struct {

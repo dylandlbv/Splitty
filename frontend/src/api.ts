@@ -4,6 +4,7 @@ export type User = {
   id: string
   email: string
   name: string
+  has_login: boolean
 }
 
 export type Household = {
@@ -115,6 +116,8 @@ export const api = {
   household: (id: string) => request<HouseholdDetail>(`/api/households/${id}`),
   addMember: (id: string, email: string) =>
     request<Member>(`/api/households/${id}/members`, jsonBody({ email })),
+  addManagedMember: (id: string, name: string) =>
+    request<Member>(`/api/households/${id}/members/managed`, jsonBody({ name })),
   incomes: (id: string, month: string) => request<Income[]>(`/api/households/${id}/incomes?month=${month}`),
   setIncomes: (id: string, month: string, incomes: Income[]) =>
     request<Income[]>(`/api/households/${id}/incomes/${month}`, {

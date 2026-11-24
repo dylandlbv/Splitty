@@ -40,12 +40,17 @@ func TestExpenses(t *testing.T) {
 	runExpenses(t, storetest.OpenSQLite(t))
 }
 
+func TestManagedMembers(t *testing.T) {
+	runManagedMembers(t, storetest.OpenSQLite(t))
+}
+
 func TestPostgresSuite(t *testing.T) {
 	runMigrateTwice(t, storetest.OpenPostgres(t))
 	runUsers(t, storetest.OpenPostgres(t))
 	runHouseholdsAndMembers(t, storetest.OpenPostgres(t))
 	runIncomes(t, storetest.OpenPostgres(t))
 	runExpenses(t, storetest.OpenPostgres(t))
+	runManagedMembers(t, storetest.OpenPostgres(t))
 }
 
 func runMigrateTwice(t *testing.T, st *store.Store) {
@@ -209,5 +214,82 @@ func runExpenses(t *testing.T, st *store.Store) {
 	}
 	if deleted, err := st.DeleteExpense(ctx, "h1", "e1"); err != nil || deleted {
 		t.Fatalf("DeleteExpense twice: %v %v", err, deleted)
+	}
+}
+
+func runManagedMembers(t *testing.T, st *store.Store) {
+	t.Helper()
+	ctx := context.Background()
+	m := month(t, "2025-03")
+
+	if _, err := st.CreateUser(ctx, "u1", "a@example.com", "Alice", "hash"); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := st.CreateHousehold(ctx, "h1", "Home", "u1"); err != nil {
+		t.Fatalf("create household: %v", err)
+	}
+
+	member, err := st.AddManagedMember(ctx, "h1", "m1", "Junior")
+	if err != nil {
+		t.Fatalf("AddManagedMember: %v", err)
+	}
+	if member.Role != "member" || member.User.ID != "m1" || member.User.Name != "Junior" {
+		t.Fatalf("unexpected member: %+v", member)
+	}
+	if member.User.HasLogin || member.User.Email != "" {
+		t.Fatalf("managed member must have no login and no exposed email: %+v", member.User)
+	}
+
+	if _, err := st.AddManagedMember(ctx, "no-such-household", "m2", "Ghost"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("AddManagedMember unknown household: want ErrNotFound, got %v", err)
+	}
+	if _, err := st.UserByID(ctx, "m2"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("rolled-back managed user must not exist: %v", err)
+	}
+
+	if role, err := st.MemberRole(ctx, "h1", "m1"); err != nil || role != "member" {
+		t.Fatalf("MemberRole for managed member: %v %q", err, role)
+	}
+
+	u, err := st.UserByID(ctx, "m1")
+	if err != nil || u.HasLogin || u.Email != "" || u.Name != "Junior" {
+		t.Fatalf("UserByID managed member: %v %+v", err, u)
+	}
+	if _, _, err := st.UserByEmail(ctx, "no-login+m1@splitty.invalid"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("managed member must not be reachable by email login: %v", err)
+	}
+
+	members, err := st.ListMembers(ctx, "h1")
+	if err != nil || len(members) != 2 {
+		t.Fatalf("ListMembers: %v %+v", err, members)
+	}
+	var managed *domain.Member
+	for i := range members {
+		if members[i].User.ID == "m1" {
+			managed = &members[i]
+		}
+	}
+	if managed == nil || managed.User.HasLogin || managed.User.Email != "" {
+		t.Fatalf("managed member in list: %+v", members)
+	}
+
+	if err := st.UpsertIncomes(ctx, "h1", m, []domain.Income{{UserID: "m1", AmountCents: 50000}}); err != nil {
+		t.Fatalf("UpsertIncomes for managed member: %v", err)
+	}
+	incomes, err := st.GetIncomes(ctx, "h1", m)
+	if err != nil || len(incomes) != 1 || incomes[0].UserID != "m1" || incomes[0].AmountCents != 50000 {
+		t.Fatalf("GetIncomes: %v %+v", err, incomes)
+	}
+
+	if _, err := st.CreateExpense(ctx, domain.Expense{
+		ID:          "e1",
+		HouseholdID: "h1",
+		Name:        "Courses",
+		AmountCents: 9000,
+		PaidBy:      "m1",
+		IsCommon:    true,
+		SplitMode:   domain.SplitEqual,
+	}, m); err != nil {
+		t.Fatalf("CreateExpense paid by managed member: %v", err)
 	}
 }
