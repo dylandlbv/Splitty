@@ -12,6 +12,7 @@ import {
   type SplitMode,
 } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 function memberName(members: HouseholdDetail['members'], userID: string): string {
   const m = members.find((x) => x.user.id === userID)
@@ -22,6 +23,7 @@ function memberName(members: HouseholdDetail['members'], userID: string): string
 export default function HouseholdPage() {
   const { id = '' } = useParams()
   const { user } = useAuth()
+  const { t } = useI18n()
 
   const [detail, setDetail] = useState<HouseholdDetail | null>(null)
   const [month, setMonth] = useState(currentMonth())
@@ -65,9 +67,9 @@ export default function HouseholdPage() {
         return next
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur de chargement')
+      setError(err instanceof Error ? err.message : t('household.loadError'))
     }
-  }, [id, month, user?.id])
+  }, [id, month, user?.id, t])
 
   useEffect(() => {
     void load()
@@ -81,7 +83,7 @@ export default function HouseholdPage() {
       setMemberEmail('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
@@ -93,7 +95,7 @@ export default function HouseholdPage() {
       setManagedName('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
@@ -130,7 +132,7 @@ export default function HouseholdPage() {
       setExpenseEuros('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
@@ -139,14 +141,14 @@ export default function HouseholdPage() {
       await api.deleteExpense(id, expenseId)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
   if (!detail) {
     return (
       <div className="page-pad">
-        <p className="muted">{error || 'Chargement…'}</p>
+        <p className="muted">{error || t('common.loading')}</p>
       </div>
     )
   }
@@ -154,12 +156,12 @@ export default function HouseholdPage() {
   return (
     <div className="page-pad">
       <Link to="/" className="muted">
-        ← Mes foyers
+        {t('household.back')}
       </Link>
       <h1 className="title">{detail.household.name}</h1>
 
       <label className="field month-field">
-        Mois
+        {t('household.month')}
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </label>
 
@@ -167,12 +169,12 @@ export default function HouseholdPage() {
 
       <div className="section-grid">
         <section className="card">
-          <h2>Membres & revenus</h2>
+          <h2>{t('household.membersTitle')}</h2>
           <table className="table">
             <thead>
               <tr>
-                <th>Membre</th>
-                <th>Revenu du mois</th>
+                <th>{t('household.colMember')}</th>
+                <th>{t('household.colIncome')}</th>
               </tr>
             </thead>
             <tbody>
@@ -181,7 +183,7 @@ export default function HouseholdPage() {
                   <td>
                     {m.user.name || m.user.email || '—'}
                     {m.role === 'admin' && <span className="badge">admin</span>}
-                    {!m.user.has_login && <span className="badge">sans compte</span>}
+                    {!m.user.has_login && <span className="badge">{t('household.badgeNoLogin')}</span>}
                   </td>
                   <td>
                     <input
@@ -197,27 +199,27 @@ export default function HouseholdPage() {
             </tbody>
           </table>
           <button className="btn btn-primary" onClick={() => void handleSaveIncomes()}>
-            Enregistrer les revenus
+            {t('household.saveIncomes')}
           </button>
           <p className="muted small">
-            Un membre sans revenu déclaré (0 €) n'est pas compté dans les dépenses proportionnelles du mois.
+            {t('household.noIncomeHint')}
           </p>
         </section>
 
         <section className="card">
-          <h2>Dépenses du mois</h2>
+          <h2>{t('household.expensesTitle')}</h2>
           <form onSubmit={handleAddExpense} className="stack">
             <label className="field">
-              Nom
+              {t('household.expenseName')}
               <input
                 value={expenseName}
                 onChange={(e) => setExpenseName(e.target.value)}
-                placeholder="Courses, loyer, électricité…"
+                placeholder={t('household.expenseNamePlaceholder')}
               />
             </label>
             <div className="row-form">
               <label className="field">
-                Montant (€)
+                {t('household.amount')}
                 <input
                   className="euro-input"
                   inputMode="decimal"
@@ -227,7 +229,7 @@ export default function HouseholdPage() {
                 />
               </label>
               <label className="field">
-                Payé par
+                {t('household.paidBy')}
                 <select value={expensePaidBy} onChange={(e) => setExpensePaidBy(e.target.value)}>
                   {detail.members.map((m) => (
                     <option key={m.user.id} value={m.user.id}>
@@ -243,19 +245,19 @@ export default function HouseholdPage() {
                 checked={expenseCommon}
                 onChange={(e) => setExpenseCommon(e.target.checked)}
               />
-              Dépense commune (sinon personne ne participe)
+              {t('household.commonExpense')}
             </label>
             {expenseCommon && (
               <label className="field">
-                Répartition
+                {t('household.split')}
                 <select value={expenseSplit} onChange={(e) => setExpenseSplit(e.target.value as SplitMode)}>
-                  <option value="proportional">Proportionnelle aux revenus</option>
-                  <option value="equal">Égalitaire</option>
+                  <option value="proportional">{t('household.splitProportional')}</option>
+                  <option value="equal">{t('household.splitEqual')}</option>
                 </select>
               </label>
             )}
             <button className="btn btn-primary" type="submit">
-              Ajouter la dépense
+              {t('household.addExpense')}
             </button>
           </form>
 
@@ -266,8 +268,12 @@ export default function HouseholdPage() {
                   <strong>{x.name}</strong>
                   <span className="muted small">
                     {' '}
-                    — {formatEuros(x.amount_cents)} payé par {memberName(detail.members, x.paid_by)}{' '}
-                    {x.is_common ? (x.split_mode === 'equal' ? '· égalitaire' : '· proportionnelle') : '· perso'}
+                    {t('household.paidByLabel', { amount: formatEuros(x.amount_cents), name: memberName(detail.members, x.paid_by) })}{' '}
+                    {x.is_common
+                      ? x.split_mode === 'equal'
+                        ? t('household.modeEqual')
+                        : t('household.modeProportional')
+                      : t('household.modePersonal')}
                   </span>
                 </div>
                 <button className="btn btn-ghost" onClick={() => void handleDeleteExpense(x.id)}>
@@ -275,20 +281,20 @@ export default function HouseholdPage() {
                 </button>
               </li>
             ))}
-            {expenses.length === 0 && <li className="muted">Aucune dépense ce mois-ci.</li>}
+            {expenses.length === 0 && <li className="muted">{t('household.noExpenses')}</li>}
           </ul>
         </section>
 
         <section className="card">
-          <h2>Soldes du mois</h2>
-          <p className="muted small">Commun : {formatEuros(settlement?.total_common_cents ?? 0)}</p>
+          <h2>{t('household.balancesTitle')}</h2>
+          <p className="muted small">{t('household.commonTotal', { amount: formatEuros(settlement?.total_common_cents ?? 0) })}</p>
           <table className="table">
             <thead>
               <tr>
-                <th>Membre</th>
-                <th>Payé</th>
-                <th>Part</th>
-                <th>Solde</th>
+                <th>{t('household.colMember')}</th>
+                <th>{t('household.colPaid')}</th>
+                <th>{t('household.colShare')}</th>
+                <th>{t('household.colBalance')}</th>
               </tr>
             </thead>
             <tbody>
@@ -304,49 +310,50 @@ export default function HouseholdPage() {
               ))}
             </tbody>
           </table>
-          <h3>Qui rembourse qui</h3>
+          <h3>{t('household.whoRepaysTitle')}</h3>
           <ul>
-            {(settlement?.transfers ?? []).map((t, i) => (
+            {(settlement?.transfers ?? []).map((tr, i) => (
               <li key={i}>
-                <strong>{memberName(detail.members, t.from_user_id)}</strong> doit{' '}
-                <strong>{formatEuros(t.amount_cents)}</strong> à{' '}
-                <strong>{memberName(detail.members, t.to_user_id)}</strong>
+                {t('household.transfer', {
+                  from: memberName(detail.members, tr.from_user_id),
+                  amount: formatEuros(tr.amount_cents),
+                  to: memberName(detail.members, tr.to_user_id),
+                })}
               </li>
             ))}
-            {(settlement?.transfers ?? []).length === 0 && <li className="muted">Tout est à l'équilibre 🎉</li>}
+            {(settlement?.transfers ?? []).length === 0 && <li className="muted">{t('household.allSettled')}</li>}
           </ul>
         </section>
 
         {isAdmin && (
           <section className="card">
-            <h2>Ajouter un membre</h2>
+            <h2>{t('household.addMemberTitle')}</h2>
             <p className="muted small">
-              La personne doit d'abord créer un compte Splitty avec cet email.
+              {t('household.addMemberHint')}
             </p>
             <form onSubmit={handleAddMember} className="row-form">
               <input
                 type="email"
                 value={memberEmail}
                 onChange={(e) => setMemberEmail(e.target.value)}
-                placeholder="email@exemple.fr"
+                placeholder={t('household.emailPlaceholder')}
               />
               <button className="btn btn-primary" type="submit">
-                Inviter
+                {t('household.invite')}
               </button>
             </form>
-            <h3>Créer un membre sans compte</h3>
+            <h3>{t('household.managedTitle')}</h3>
             <p className="muted small">
-              Sans email ni mot de passe (enfant, personne âgée…) : vous déclarez ses revenus et ses
-              dépenses à sa place, comme pour votre propre compte.
+              {t('household.managedHint')}
             </p>
             <form onSubmit={handleAddManagedMember} className="row-form">
               <input
                 value={managedName}
                 onChange={(e) => setManagedName(e.target.value)}
-                placeholder="Prénom ou surnom"
+                placeholder={t('household.managedNamePlaceholder')}
               />
               <button className="btn btn-primary" type="submit">
-                Créer
+                {t('household.create')}
               </button>
             </form>
           </section>

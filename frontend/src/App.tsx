@@ -1,14 +1,17 @@
 import { Navigate, Route, Routes, Link } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { useAuth } from './auth'
+import { useI18n } from './i18n'
+import LanguageSwitcher from './components/LanguageSwitcher'
 import HouseholdsPage from './pages/Households'
 import HouseholdPage from './pages/Household'
 import LoginPage from './pages/Login'
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { user, loading } = useAuth()
+  const { t } = useI18n()
   if (loading) {
-    return <p className="muted page-pad">Chargement…</p>
+    return <p className="muted page-pad">{t('common.loading')}</p>
   }
   if (!user) {
     return <Navigate to="/login" replace />
@@ -18,6 +21,7 @@ function RequireAuth({ children }: { children: ReactElement }) {
 
 export default function App() {
   const { user, loading, logout } = useAuth()
+  const { t } = useI18n()
 
   return (
     <div>
@@ -28,8 +32,9 @@ export default function App() {
           </Link>
           <div className="topbar-right">
             <span className="muted">{user.name || user.email}</span>
+            <LanguageSwitcher />
             <button className="btn btn-ghost" onClick={logout}>
-              Déconnexion
+              {t('app.logout')}
             </button>
           </div>
         </nav>
@@ -39,7 +44,7 @@ export default function App() {
           path="/login"
           element={
             loading ? (
-              <p className="muted page-pad">Chargement…</p>
+              <p className="muted page-pad">{t('common.loading')}</p>
             ) : !user ? (
               <LoginPage />
             ) : (
