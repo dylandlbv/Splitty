@@ -1,9 +1,12 @@
 import { FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 export default function LoginPage() {
   const { login, register } = useAuth()
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
@@ -24,7 +27,7 @@ export default function LoginPage() {
       }
       navigate('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -34,48 +37,53 @@ export default function LoginPage() {
     <div className="page-pad auth-wrap">
       <div className="card auth-card">
         <h1 className="title">Splitty</h1>
-        <p className="muted">Le budget familial, chacun paie sa juste part — au prorata de ses revenus.</p>
+        <p className="muted">{t('login.tagline')}</p>
         <form onSubmit={handleSubmit} className="stack">
           {mode === 'register' && (
             <label className="field">
-              Nom
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Dylan" />
+              {t('login.name')}
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('login.namePlaceholder')}
+              />
             </label>
           )}
           <label className="field">
-            Email
+            {t('login.email')}
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="moi@exemple.fr"
+              placeholder={t('login.emailPlaceholder')}
             />
           </label>
           <label className="field">
-            Mot de passe
+            {t('login.password')}
             <input
               type="password"
               required
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="8 caractères minimum"
+              placeholder={t('login.passwordPlaceholder')}
             />
           </label>
           {error && <p className="error">{error}</p>}
           <button className="btn btn-primary" disabled={busy}>
-            {busy ? '…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+            {busy ? '…' : mode === 'login' ? t('login.signIn') : t('login.createAccount')}
           </button>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
           >
-            {mode === 'login' ? "Pas de compte ? S'inscrire" : 'Déjà un compte ? Se connecter'}
+            {mode === 'login' ? t('login.noAccount') : t('login.hasAccount')}
           </button>
         </form>
       </div>
+      <LanguageSwitcher />
     </div>
   )
 }

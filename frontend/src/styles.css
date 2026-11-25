@@ -273,3 +273,13 @@ select:focus {
   max-width: 200px;
   margin-top: 0.8rem;
 }
+
+.lang-switcher {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.15rem 0.4rem;
+  font: inherit;
+  cursor: pointer;
+}

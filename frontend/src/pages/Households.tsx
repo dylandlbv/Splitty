@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Household } from '../api'
+import { useI18n } from '../i18n'
 
 export default function HouseholdsPage() {
+  const { t } = useI18n()
   const [households, setHouseholds] = useState<Household[]>([])
   const [name, setName] = useState('')
   const [error, setError] = useState('')
@@ -12,9 +14,9 @@ export default function HouseholdsPage() {
     api
       .households()
       .then(setHouseholds)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur'))
+      .catch((err) => setError(err instanceof Error ? err.message : t('common.error')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [t])
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -25,22 +27,20 @@ export default function HouseholdsPage() {
       setHouseholds((prev) => [...prev, created])
       setName('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
   return (
     <div className="page-pad">
-      <h1 className="title">Mes foyers</h1>
-      {loading && <p className="muted">Chargement…</p>}
-      {!loading && households.length === 0 && (
-        <p className="muted">Aucun foyer pour l'instant. Crée le tien pour commencer.</p>
-      )}
+      <h1 className="title">{t('households.title')}</h1>
+      {loading && <p className="muted">{t('common.loading')}</p>}
+      {!loading && households.length === 0 && <p className="muted">{t('households.empty')}</p>}
       <div className="grid-cards">
         {households.map((h) => (
           <Link key={h.id} to={`/households/${h.id}`} className="card household-card">
             <span className="household-name">{h.name}</span>
-            <span className="muted">Ouvrir →</span>
+            <span className="muted">{t('households.open')}</span>
           </Link>
         ))}
       </div>
@@ -48,10 +48,10 @@ export default function HouseholdsPage() {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nom du nouveau foyer (ex. Famille Dupont)"
+          placeholder={t('households.newNamePlaceholder')}
         />
         <button className="btn btn-primary" type="submit">
-          Créer le foyer
+          {t('households.create')}
         </button>
       </form>
       {error && <p className="error">{error}</p>}
